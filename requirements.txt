@@ -2,9 +2,9 @@
 flask==3.0.0
 flask-cors==4.0.0
 
-# Deep Learning (CPU - compatible Render)
-torch==2.2.2
-torchvision==0.17.2
+# Deep Learning
+torch==2.1.2
+torchvision==0.16.2
 
 # Image Processing
 numpy==1.24.3
