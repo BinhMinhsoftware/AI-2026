@@ -8,5 +8,5 @@ torch
 torchvision
 
 # Image Processing
-numpy==1.24.3
-pillow==10.0.0
+numpy
+pillow
