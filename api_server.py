@@ -16,7 +16,7 @@ import config_pytorch as config
 app = Flask(__name__)
 CORS(app)
 
-# ================== FIX QUAN TRỌNG ==================
+# ================== FIX CHUẨN ==================
 predictor = None
 
 def get_predictor():
@@ -27,41 +27,45 @@ def get_predictor():
         print("Model loaded!")
     return predictor
 
-# 👉 Nếu chạy LOCAL thì load sẵn
+# 👉 LOCAL: load sẵn (cho nhanh)
 if os.environ.get("RENDER") is None:
     print("Initializing Dog Breed Predictor (LOCAL)...")
     predictor = DogBreedPredictor()
     print("Predictor ready!")
-# ===================================================
+# =============================================
 
 
+# ================== HEALTH (KHÔNG LOAD MODEL) ==================
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    model = get_predictor()
     return jsonify({
-        'status': 'healthy',
-        'model_loaded': model.model is not None,
-        'num_classes': len(model.breed_names)
+        'status': 'healthy'
     })
+# =============================================================
 
 
 @app.route('/api/breeds', methods=['GET'])
 def get_breeds():
-    model = get_predictor()
+    try:
+        model = get_predictor()
 
-    breeds = [
-        {
-            'index': i,
-            'code': model.breed_names[i],
-            'name': model.breed_names[i].split('-')[1].replace('_', ' ').title()
-        }
-        for i in range(len(model.breed_names))
-    ]
+        breeds = [
+            {
+                'index': i,
+                'code': model.breed_names[i],
+                'name': model.breed_names[i].split('-')[1].replace('_', ' ').title()
+            }
+            for i in range(len(model.breed_names))
+        ]
 
-    return jsonify({
-        'total': len(breeds),
-        'breeds': breeds
-    })
+        return jsonify({
+            'success': True,
+            'total': len(breeds),
+            'breeds': breeds
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/predict', methods=['POST'])
@@ -101,7 +105,7 @@ def predict_base64():
     try:
         data = request.get_json()
 
-        if 'image' not in data:
+        if not data or 'image' not in data:
             return jsonify({'success': False, 'error': 'No image data provided'}), 400
 
         image_data = data['image']
@@ -195,10 +199,11 @@ if __name__ == '__main__':
     print("=" * 80)
     print(f"Model: {config.MODEL_ARCHITECTURE}")
 
-    model = get_predictor()
-    print(f"Number of breeds: {len(model.breed_names)}")
+    # 👉 LOCAL mới load
+    if predictor is None:
+        predictor = DogBreedPredictor()
 
-    print("\nStarting server...")
+    print(f"Number of breeds: {len(predictor.breed_names)}")
 
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
