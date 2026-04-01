@@ -56,3 +56,4 @@ dataset/Annotation/
 Thumbs.db
 
 !best_model.pth
+!label_mapping.pkl
