@@ -27,21 +27,19 @@ def get_predictor():
         print("Model loaded!")
     return predictor
 
-# 👉 LOCAL: load sẵn (cho nhanh)
-if os.environ.get("RENDER") is None:
-    print("Initializing Dog Breed Predictor (LOCAL)...")
-    predictor = DogBreedPredictor()
-    print("Predictor ready!")
+# ❌ BỎ đoạn RENDER check (vì Render KHÔNG có biến này)
+# if os.environ.get("RENDER") is None:  <-- XÓA
+
 # =============================================
 
 
-# ================== HEALTH (KHÔNG LOAD MODEL) ==================
+# ================== HEALTH ==================
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({
         'status': 'healthy'
     })
-# =============================================================
+# ===========================================
 
 
 @app.route('/api/breeds', methods=['GET'])
@@ -199,9 +197,8 @@ if __name__ == '__main__':
     print("=" * 80)
     print(f"Model: {config.MODEL_ARCHITECTURE}")
 
-    # 👉 LOCAL mới load
-    if predictor is None:
-        predictor = DogBreedPredictor()
+    # ✅ LOAD MODEL 1 LẦN DUY NHẤT
+    predictor = get_predictor()
 
     print(f"Number of breeds: {len(predictor.breed_names)}")
 
