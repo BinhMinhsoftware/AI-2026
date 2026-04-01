@@ -54,3 +54,5 @@ dataset/Annotation/
 
 .DS_Store
 Thumbs.db
+
+!best_model.pth
