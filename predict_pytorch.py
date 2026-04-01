@@ -8,18 +8,18 @@ from PIL import Image
 import numpy as np
 from torchvision import transforms
 import pickle
-import urllib.request  # ✅ THÊM
+import gdown
 
 import config_pytorch as config
 from model_pytorch import DogBreedModel
 
 
-# ✅ THÊM HÀM DOWNLOAD
+# ✅ FIX: ĐỂ NGOÀI CLASS
 def download_model_if_needed(model_path):
     if not os.path.exists(model_path):
         print("Downloading model from Google Drive...")
-        url = "https://drive.google.com/uc?export=download&id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
-        urllib.request.urlretrieve(url, model_path)
+        url = "https://drive.google.com/uc?id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
+        gdown.download(url, model_path, quiet=False)
         print("Download completed!")
 
 
@@ -34,15 +34,11 @@ class DogBreedPredictor:
 
         # Default model path
         if model_path is None:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-
-            # ưu tiên best_model
-            model_path = os.path.join(base_dir, 'best_model.pth')
-
+            model_path = os.path.join(config.MODEL_DIR, 'best_model.pth')
             if not os.path.exists(model_path):
-                model_path = os.path.join(base_dir, 'final_model.pth')
+                model_path = os.path.join(config.MODEL_DIR, 'final_model.pth')
 
-        # ✅ FIX QUAN TRỌNG: tải model nếu chưa có
+        # ✅ FIX: gọi được vì hàm nằm ngoài
         download_model_if_needed(model_path)
 
         if not os.path.exists(model_path):
@@ -51,9 +47,7 @@ class DogBreedPredictor:
         print(f"Loading model from: {model_path}")
 
         # Load label mapping
-        base_dir = os.path.dirname(os.path.abspath(__file__))  # đảm bảo có
-        mapping_file = os.path.join(base_dir, 'label_mapping.pkl')
-
+        mapping_file = os.path.join(config.MODEL_DIR, 'label_mapping.pkl')
         with open(mapping_file, 'rb') as f:
             label_mapping = pickle.load(f)
 
@@ -68,13 +62,14 @@ class DogBreedPredictor:
             pretrained=False
         )
 
-        # Load checkpoint
+        # ✅ FIX: thêm weights_only=False (tránh lỗi PyTorch mới)
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model = self.model.to(self.device)
         self.model.eval()
 
-        print(f"Model loaded successfully! (Val Acc: {checkpoint.get('val_acc', 'N/A'):.2f}%)")
+        print(f"Model loaded successfully! (Val Acc: {checkpoint.get('val_acc', 'N/A')})")
         print(f"Using device: {self.device}")
 
         # Create transform
@@ -94,8 +89,7 @@ class DogBreedPredictor:
         else:
             image = image_input
 
-        image_tensor = self.transform(image)
-        return image_tensor
+        return self.transform(image)
 
     @torch.no_grad()
     def predict(self, image_input, top_k=5):
@@ -103,9 +97,8 @@ class DogBreedPredictor:
         image_batch = image_tensor.unsqueeze(0).to(self.device)
 
         self.model.eval()
-        with torch.no_grad():
-            outputs = self.model(image_batch)
-            probabilities = F.softmax(outputs, dim=1)[0]
+        outputs = self.model(image_batch)
+        probabilities = F.softmax(outputs, dim=1)[0]
 
         top_probs, top_indices = probabilities.topk(top_k)
 
@@ -114,13 +107,12 @@ class DogBreedPredictor:
             idx = idx.item()
             breed_code = self.index_to_label[idx]
             breed_name = breed_code.split('-')[1].replace('_', ' ').title()
-            confidence = prob.item()
 
             results.append({
                 'breed': breed_name,
                 'breed_code': breed_code,
-                'confidence': confidence,
-                'confidence_percent': confidence * 100
+                'confidence': prob.item(),
+                'confidence_percent': prob.item() * 100
             })
 
         return {
@@ -137,12 +129,10 @@ class DogBreedPredictor:
                 result['image_path'] = img_path
                 results.append(result)
             except Exception as e:
-                print(f"Error predicting {img_path}: {e}")
                 results.append({
                     'image_path': img_path,
                     'error': str(e)
                 })
-
         return results
 
     def visualize_prediction(self, image_input, save_path=None):
@@ -160,33 +150,29 @@ class DogBreedPredictor:
         ax1.imshow(original_img)
         ax1.axis('off')
         ax1.set_title(
-            f"Predicted: {result['top_prediction']['breed']}\n"
-            f"Confidence: {result['top_prediction']['confidence_percent']:.2f}%",
-            fontsize=14,
-            weight='bold'
+            f"{result['top_prediction']['breed']} ({result['top_prediction']['confidence_percent']:.2f}%)"
         )
 
         breeds = [p['breed'] for p in result['top_k_predictions']]
         confidences = [p['confidence_percent'] for p in result['top_k_predictions']]
 
-        colors = ['#2E86AB' if i == 0 else '#F18F01' if i < 3 else '#C73E1D'
-                  for i in range(len(breeds))]
-
-        ax2.barh(breeds, confidences, color=colors, alpha=0.8)
-        ax2.set_xlabel('Confidence (%)', fontsize=12)
-        ax2.set_title('Top 5 Predictions', fontsize=14, weight='bold')
+        ax2.barh(breeds, confidences)
         ax2.invert_yaxis()
-        ax2.set_xlim(0, 100)
-
-        for i, v in enumerate(confidences):
-            ax2.text(v + 2, i, f'{v:.2f}%', va='center', fontsize=10)
 
         plt.tight_layout()
 
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"Visualization saved to: {save_path}")
+            plt.savefig(save_path)
         else:
             plt.show()
 
         plt.close()
+
+
+def main():
+    predictor = DogBreedPredictor()
+    print("Ready!")
+
+
+if __name__ == "__main__":
+    main()
