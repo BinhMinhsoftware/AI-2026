@@ -8,22 +8,25 @@ from PIL import Image
 import numpy as np
 from torchvision import transforms
 import pickle
+import urllib.request  # ✅ THÊM
 
 import config_pytorch as config
 from model_pytorch import DogBreedModel
+
+
+# ✅ THÊM HÀM DOWNLOAD
+def download_model_if_needed(model_path):
+    if not os.path.exists(model_path):
+        print("Downloading model from Google Drive...")
+        url = "https://drive.google.com/uc?export=download&id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
+        urllib.request.urlretrieve(url, model_path)
+        print("Download completed!")
 
 
 class DogBreedPredictor:
     """Dog breed predictor using PyTorch"""
 
     def __init__(self, model_path=None, device=None):
-        """
-        Initialize predictor
-
-        Args:
-            model_path: Path to trained model checkpoint
-            device: torch.device (default: auto-detect)
-        """
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
@@ -39,13 +42,18 @@ class DogBreedPredictor:
             if not os.path.exists(model_path):
                 model_path = os.path.join(base_dir, 'final_model.pth')
 
+        # ✅ FIX QUAN TRỌNG: tải model nếu chưa có
+        download_model_if_needed(model_path)
+
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
 
         print(f"Loading model from: {model_path}")
 
         # Load label mapping
+        base_dir = os.path.dirname(os.path.abspath(__file__))  # đảm bảo có
         mapping_file = os.path.join(base_dir, 'label_mapping.pkl')
+
         with open(mapping_file, 'rb') as f:
             label_mapping = pickle.load(f)
 
@@ -77,19 +85,6 @@ class DogBreedPredictor:
         ])
 
     def preprocess_image(self, image_input):
-        """
-        Preprocess image for prediction
-
-        Args:
-            image_input: Can be:
-                - File path (str)
-                - PIL Image
-                - NumPy array
-
-        Returns:
-            Preprocessed tensor
-        """
-        # Load image if path provided
         if isinstance(image_input, str):
             if not os.path.exists(image_input):
                 raise FileNotFoundError(f"Image not found: {image_input}")
@@ -99,33 +94,19 @@ class DogBreedPredictor:
         else:
             image = image_input
 
-        # Apply transform
         image_tensor = self.transform(image)
         return image_tensor
 
     @torch.no_grad()
     def predict(self, image_input, top_k=5):
-        """
-        Predict dog breed from image
-
-        Args:
-            image_input: Image input
-            top_k: Number of top predictions
-
-        Returns:
-            Dictionary with predictions
-        """
-        # Preprocess
         image_tensor = self.preprocess_image(image_input)
         image_batch = image_tensor.unsqueeze(0).to(self.device)
 
-        # Predict
         self.model.eval()
         with torch.no_grad():
             outputs = self.model(image_batch)
             probabilities = F.softmax(outputs, dim=1)[0]
 
-        # Get top-k predictions
         top_probs, top_indices = probabilities.topk(top_k)
 
         results = []
@@ -149,16 +130,6 @@ class DogBreedPredictor:
         }
 
     def predict_batch(self, image_paths, top_k=5):
-        """
-        Predict multiple images
-
-        Args:
-            image_paths: List of image paths
-            top_k: Number of top predictions
-
-        Returns:
-            List of prediction dictionaries
-        """
         results = []
         for img_path in image_paths:
             try:
@@ -175,28 +146,17 @@ class DogBreedPredictor:
         return results
 
     def visualize_prediction(self, image_input, save_path=None):
-        """
-        Visualize prediction with image
-
-        Args:
-            image_input: Image input
-            save_path: Path to save visualization
-        """
         import matplotlib.pyplot as plt
 
-        # Load original image
         if isinstance(image_input, str):
             original_img = Image.open(image_input).convert('RGB')
         else:
             original_img = image_input
 
-        # Predict
         result = self.predict(image_input, top_k=5)
 
-        # Plot
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
-        # Show image
         ax1.imshow(original_img)
         ax1.axis('off')
         ax1.set_title(
@@ -206,7 +166,6 @@ class DogBreedPredictor:
             weight='bold'
         )
 
-        # Show top-5 predictions
         breeds = [p['breed'] for p in result['top_k_predictions']]
         confidences = [p['confidence_percent'] for p in result['top_k_predictions']]
 
@@ -219,7 +178,6 @@ class DogBreedPredictor:
         ax2.invert_yaxis()
         ax2.set_xlim(0, 100)
 
-        # Add percentage labels
         for i, v in enumerate(confidences):
             ax2.text(v + 2, i, f'{v:.2f}%', va='center', fontsize=10)
 
@@ -232,34 +190,3 @@ class DogBreedPredictor:
             plt.show()
 
         plt.close()
-
-
-def main():
-    """Example usage"""
-    print("=" * 80)
-    print("DOG BREED PREDICTOR (PyTorch)")
-    print("=" * 80)
-
-    # Initialize predictor
-    predictor = DogBreedPredictor()
-
-    print("\nExample Usage:")
-    print("-" * 80)
-    print("\n1. Predict single image:")
-    print("   result = predictor.predict('path/to/dog.jpg')")
-    print("   print(result['top_prediction'])")
-
-    print("\n2. Predict with visualization:")
-    print("   predictor.visualize_prediction('path/to/dog.jpg', save_path='result.png')")
-
-    print("\n3. Batch prediction:")
-    print("   images = ['img1.jpg', 'img2.jpg', 'img3.jpg']")
-    print("   results = predictor.predict_batch(images)")
-
-    print("\n" + "=" * 80)
-    print("Ready to predict!")
-    print("=" * 80)
-
-
-if __name__ == "__main__":
-    main()
