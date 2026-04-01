@@ -29,6 +29,7 @@ results/*.png
 results/*.csv
 
 models_pytorch/
+!models_pytorch/label_mapping.pkl
 logs_pytorch/
 results_pytorch/
 *.pth
@@ -38,6 +39,7 @@ results_pytorch/
 data_cache.pkl
 image_paths_cache.pkl
 *.pkl
+
 
 dataset/Images/
 dataset/Annotation/
