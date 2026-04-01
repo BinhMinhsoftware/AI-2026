@@ -14,12 +14,15 @@ import config_pytorch as config
 from model_pytorch import DogBreedModel
 
 
-# ✅ FIX: ĐỂ NGOÀI CLASS
+# ✅ FIX: ĐỂ NGOÀI CLASS + dùng link chuẩn + fuzzy=True
 def download_model_if_needed(model_path):
     if not os.path.exists(model_path):
         print("Downloading model from Google Drive...")
-        url = "https://drive.google.com/uc?id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
-        gdown.download(url, model_path, quiet=False)
+        
+        url = "https://drive.google.com/file/d/1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH/view"
+        
+        gdown.download(url, model_path, quiet=False, fuzzy=True)
+        
         print("Download completed!")
 
 
@@ -38,7 +41,7 @@ class DogBreedPredictor:
             if not os.path.exists(model_path):
                 model_path = os.path.join(config.MODEL_DIR, 'final_model.pth')
 
-        # ✅ FIX: gọi được vì hàm nằm ngoài
+        # ✅ tải model nếu chưa có
         download_model_if_needed(model_path)
 
         if not os.path.exists(model_path):
@@ -48,6 +51,9 @@ class DogBreedPredictor:
 
         # Load label mapping
         mapping_file = os.path.join(config.MODEL_DIR, 'label_mapping.pkl')
+        if not os.path.exists(mapping_file):
+            raise FileNotFoundError(f"Label mapping not found: {mapping_file}")
+
         with open(mapping_file, 'rb') as f:
             label_mapping = pickle.load(f)
 
@@ -62,7 +68,7 @@ class DogBreedPredictor:
             pretrained=False
         )
 
-        # ✅ FIX: thêm weights_only=False (tránh lỗi PyTorch mới)
+        # ✅ FIX PyTorch mới
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -72,7 +78,7 @@ class DogBreedPredictor:
         print(f"Model loaded successfully! (Val Acc: {checkpoint.get('val_acc', 'N/A')})")
         print(f"Using device: {self.device}")
 
-        # Create transform
+        # Transform
         self.transform = transforms.Compose([
             transforms.Resize((config.IMG_HEIGHT, config.IMG_WIDTH)),
             transforms.ToTensor(),
