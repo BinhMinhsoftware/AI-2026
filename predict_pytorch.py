@@ -31,9 +31,13 @@ class DogBreedPredictor:
 
         # Default model path
         if model_path is None:
-            model_path = os.path.join(config.MODEL_DIR, 'best_model.pth')
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+            # ưu tiên best_model
+            model_path = os.path.join(base_dir, 'best_model.pth')
+
             if not os.path.exists(model_path):
-                model_path = os.path.join(config.MODEL_DIR, 'final_model.pth')
+                model_path = os.path.join(base_dir, 'final_model.pth')
 
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
@@ -41,7 +45,7 @@ class DogBreedPredictor:
         print(f"Loading model from: {model_path}")
 
         # Load label mapping
-        mapping_file = os.path.join(config.MODEL_DIR, 'label_mapping.pkl')
+        mapping_file = os.path.join(base_dir, 'label_mapping.pkl')
         with open(mapping_file, 'rb') as f:
             label_mapping = pickle.load(f)
 
