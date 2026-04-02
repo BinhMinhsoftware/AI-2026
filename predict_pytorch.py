@@ -8,49 +8,44 @@ from PIL import Image
 import numpy as np
 from torchvision import transforms
 import pickle
-import gdown
 
 import config_pytorch as config
 from model_pytorch import DogBreedModel
-
-
-# ✅ FIX: ĐỂ NGOÀI CLASS + dùng link chuẩn + fuzzy=True
-def download_model_if_needed(model_path):
-    if not os.path.exists(model_path):
-        print("Downloading model from Google Drive...")
-        
-        url = "https://drive.google.com/uc?id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
-        gdown.download(url, model_path, quiet=False)
-        print("Download completed!")
 
 
 class DogBreedPredictor:
     """Dog breed predictor using PyTorch"""
 
     def __init__(self, model_path=None, device=None):
+
+        # ================= DEVICE =================
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = device
 
-        # Default model path
+        print(f"Using device: {self.device}")
+
+        # ================= MODEL PATH =================
         if model_path is None:
             model_path = os.path.join(config.MODEL_DIR, 'best_model.pth')
-            if not os.path.exists(model_path):
-                model_path = os.path.join(config.MODEL_DIR, 'final_model.pth')
 
-        # ✅ tải model nếu chưa có
-        download_model_if_needed(model_path)
-
+        # ❌ KHÔNG DOWNLOAD NỮA
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model not found: {model_path}")
+            raise FileNotFoundError(
+                f"Model not found at {model_path}. "
+                f"Please upload best_model.pth to models_pytorch/"
+            )
 
         print(f"Loading model from: {model_path}")
 
-        # Load label mapping
+        # ================= LOAD LABEL MAPPING =================
         mapping_file = os.path.join(config.MODEL_DIR, 'label_mapping.pkl')
+
         if not os.path.exists(mapping_file):
-            raise FileNotFoundError(f"Label mapping not found: {mapping_file}")
+            raise FileNotFoundError(
+                f"Label mapping not found at {mapping_file}"
+            )
 
         with open(mapping_file, 'rb') as f:
             label_mapping = pickle.load(f)
@@ -59,48 +54,55 @@ class DogBreedPredictor:
         self.breed_names = label_mapping['breed_names']
         self.num_classes = len(self.breed_names)
 
-        # Load model
+        print(f"Loaded {self.num_classes} classes")
+
+        # ================= LOAD MODEL =================
         self.model = DogBreedModel(
             num_classes=self.num_classes,
             architecture=config.MODEL_ARCHITECTURE,
             pretrained=False
         )
 
-        # ✅ FIX PyTorch mới
-        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+        checkpoint = torch.load(model_path, map_location=self.device)
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model = self.model.to(self.device)
         self.model.eval()
 
         print(f"Model loaded successfully! (Val Acc: {checkpoint.get('val_acc', 'N/A')})")
-        print(f"Using device: {self.device}")
 
-        # Transform
+        # ================= TRANSFORM =================
         self.transform = transforms.Compose([
             transforms.Resize((config.IMG_HEIGHT, config.IMG_WIDTH)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=config.NORMALIZE_MEAN, std=config.NORMALIZE_STD)
+            transforms.Normalize(
+                mean=config.NORMALIZE_MEAN,
+                std=config.NORMALIZE_STD
+            )
         ])
 
+    # ================= PREPROCESS =================
     def preprocess_image(self, image_input):
         if isinstance(image_input, str):
             if not os.path.exists(image_input):
                 raise FileNotFoundError(f"Image not found: {image_input}")
             image = Image.open(image_input).convert('RGB')
+
         elif isinstance(image_input, np.ndarray):
             image = Image.fromarray(image_input)
+
         else:
             image = image_input
 
         return self.transform(image)
 
+    # ================= PREDICT =================
     @torch.no_grad()
     def predict(self, image_input, top_k=5):
+
         image_tensor = self.preprocess_image(image_input)
         image_batch = image_tensor.unsqueeze(0).to(self.device)
 
-        self.model.eval()
         outputs = self.model(image_batch)
         probabilities = F.softmax(outputs, dim=1)[0]
 
@@ -109,6 +111,7 @@ class DogBreedPredictor:
         results = []
         for prob, idx in zip(top_probs, top_indices):
             idx = idx.item()
+
             breed_code = self.index_to_label[idx]
             breed_name = breed_code.split('-')[1].replace('_', ' ').title()
 
@@ -125,20 +128,25 @@ class DogBreedPredictor:
             'all_probabilities': probabilities.cpu().numpy()
         }
 
+    # ================= BATCH =================
     def predict_batch(self, image_paths, top_k=5):
         results = []
+
         for img_path in image_paths:
             try:
                 result = self.predict(img_path, top_k=top_k)
                 result['image_path'] = img_path
                 results.append(result)
+
             except Exception as e:
                 results.append({
                     'image_path': img_path,
                     'error': str(e)
                 })
+
         return results
 
+    # ================= VISUALIZE =================
     def visualize_prediction(self, image_input, save_path=None):
         import matplotlib.pyplot as plt
 
@@ -154,7 +162,8 @@ class DogBreedPredictor:
         ax1.imshow(original_img)
         ax1.axis('off')
         ax1.set_title(
-            f"{result['top_prediction']['breed']} ({result['top_prediction']['confidence_percent']:.2f}%)"
+            f"{result['top_prediction']['breed']} "
+            f"({result['top_prediction']['confidence_percent']:.2f}%)"
         )
 
         breeds = [p['breed'] for p in result['top_k_predictions']]
@@ -173,6 +182,7 @@ class DogBreedPredictor:
         plt.close()
 
 
+# ================= MAIN =================
 def main():
     predictor = DogBreedPredictor()
     print("Ready!")
