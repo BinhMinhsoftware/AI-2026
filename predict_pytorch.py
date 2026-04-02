@@ -19,10 +19,8 @@ def download_model_if_needed(model_path):
     if not os.path.exists(model_path):
         print("Downloading model from Google Drive...")
         
-        url = "https://drive.google.com/file/d/1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH/view"
-        
-        gdown.download(url, model_path, quiet=False, fuzzy=True)
-        
+        url = "https://drive.google.com/uc?id=1jyDpU9_LGoCP_p2YSeRYqMEKDh40kMkH"
+        gdown.download(url, model_path, quiet=False)
         print("Download completed!")
 
 
